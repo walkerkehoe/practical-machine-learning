@@ -1,0 +1,68 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##Summary
+The goal of this project is to predict the manner in which the 6 participants in the Weight Lifting Exercise dataset did an activity. The Random Forests model performed this prediction the best, with over 99% accuracy, according to the associated confusion matrix. 
+##Reading in the Data
+```{r, echo=FALSE}
+library(caret)
+library(randomForest)
+```
+```{r, echo=TRUE}
+train <- read.csv('pml-training.csv', na.strings=c('NA','#DIV/0!',''), header=TRUE)
+test <- read.csv('pml-testing.csv', na.strings=c('NA','#DIV/0!',''), header=TRUE)
+```
+##Data Cleansing
+We'll begin our data cleansing process by removing features in the training set that have no observations in the test set. Sparse features will not improve our machine learning model's accuracy, especially if the test data doesn't contain observations for the features. We'll also drop the first 7 columns of the dataset because they represent metadata (name, index, time) that is not relevant to our machine learning objective.
+```{r, echo=TRUE}
+test <- test[ , -which(colnames(test) %in% colnames(test)[colSums(is.na(test)) > 0])]
+test <- test[,-c(1:7)]
+train <- train[ , -which(colnames(train) %in% colnames(train)[colSums(is.na(train)) > 0])]
+train <- train[,-c(1:7)]
+```
+##Cross Validation
+Now that our data is clean, we can split the training data for cross-validation. We'll do a 75/25 split, training to test data. 
+```{r, echo=TRUE}
+cv <- createDataPartition(train$classe, p=0.75, list=FALSE)
+cv_train <- train[cv,]
+cv_test <- train[-cv,]
+```
+##Logistic Regression
+Logistic regression is generally a good classification model and we'll start our analysis by applying multinomial logistic regression to the dataset. 
+```{r, echo=TRUE}
+library(foreign)
+library(nnet)
+library(ggplot2)
+library(reshape2)
+set.seed(1738)
+test_ <- multinom(classe~., data = cv_train)
+predi <- predict(test_, cv_test)
+cmat <- confusionMatrix(predi, cv_test$classe)
+print(cmat)
+```
+Unfortunately, logistic regression was only able to predict with 68% accuracy according to the confusion matrix. Let's see if we can do better with a different model.
+##Random Forests
+We'll try applying the Random Forests model on our cross validated data.
+```{r, echo=TRUE}
+mod <- randomForest(classe~., data=cv_train, method='class')
+pred <- predict(mod, cv_test)
+cmatrix <- confusionMatrix(pred, cv_test$classe)
+print(cmatrix)
+```
+Random Forests performed very well with an accuracy of over 99%. Below, we plot trees against error.
+```{r, echo=TRUE}
+plot(mod, main='Random Forest Model')
+```
+##Predicting with the test data
+Finally, we'll use our cross validated Random Forests model to predict on the test set. 
+```{r, echo=TRUE}
+final <- predict(mod, test, type="class")
+print(final)
+```
+
+
